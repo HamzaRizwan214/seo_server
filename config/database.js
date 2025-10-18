@@ -1,5 +1,9 @@
-import pg from 'pg';
-import dotenv from 'dotenv';
+import pg from "pg";
+import dotenv from "dotenv";
+import dns from "dns";
+
+// Force IPv4 connections to avoid IPv6 issues on Render
+dns.setDefaultResultOrder("ipv4first");
 
 dotenv.config();
 
@@ -7,12 +11,15 @@ const { Pool } = pg;
 
 // Database configuration - Use individual parameters for better Render compatibility
 const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
+  host: process.env.DB_HOST || "localhost",
   port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'postgres',
-  user: process.env.DB_USER || 'postgres',
+  database: process.env.DB_NAME || "postgres",
+  user: process.env.DB_USER || "postgres",
   password: process.env.DB_PASSWORD,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
@@ -25,8 +32,8 @@ const dbConfig = {
 const pool = new Pool(dbConfig);
 
 // Handle pool errors
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle client", err);
   process.exit(-1);
 });
 
@@ -34,12 +41,12 @@ pool.on('error', (err) => {
 export const testConnection = async () => {
   try {
     const client = await pool.connect();
-    const result = await client.query('SELECT NOW()');
-    console.log('✅ Database connected successfully at:', result.rows[0].now);
+    const result = await client.query("SELECT NOW()");
+    console.log("✅ Database connected successfully at:", result.rows[0].now);
     client.release();
     return true;
   } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
+    console.error("❌ Database connection failed:", error.message);
     return false;
   }
 };
@@ -50,17 +57,21 @@ export const query = async (text, params) => {
   try {
     const result = await pool.query(text, params);
     const duration = Date.now() - start;
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log('📊 Query executed:', { text, duration: `${duration}ms`, rows: result.rowCount });
+
+    if (process.env.NODE_ENV === "development") {
+      console.log("📊 Query executed:", {
+        text,
+        duration: `${duration}ms`,
+        rows: result.rowCount,
+      });
     }
-    
+
     return result;
   } catch (error) {
-    console.error('❌ Database query error:', {
+    console.error("❌ Database query error:", {
       query: text,
       params,
-      error: error.message
+      error: error.message,
     });
     throw error;
   }
@@ -69,13 +80,13 @@ export const query = async (text, params) => {
 // Transaction helper functions
 export const beginTransaction = async () => {
   const client = await pool.connect();
-  await client.query('BEGIN');
+  await client.query("BEGIN");
   return client;
 };
 
 export const commitTransaction = async (client) => {
   try {
-    await client.query('COMMIT');
+    await client.query("COMMIT");
   } finally {
     client.release();
   }
@@ -83,7 +94,7 @@ export const commitTransaction = async (client) => {
 
 export const rollbackTransaction = async (client) => {
   try {
-    await client.query('ROLLBACK');
+    await client.query("ROLLBACK");
   } finally {
     client.release();
   }
@@ -94,7 +105,7 @@ export const getPoolStats = () => {
   return {
     totalCount: pool.totalCount,
     idleCount: pool.idleCount,
-    waitingCount: pool.waitingCount
+    waitingCount: pool.waitingCount,
   };
 };
 
@@ -102,9 +113,9 @@ export const getPoolStats = () => {
 export const closePool = async () => {
   try {
     await pool.end();
-    console.log('📊 Database pool closed');
+    console.log("📊 Database pool closed");
   } catch (error) {
-    console.error('❌ Error closing database pool:', error);
+    console.error("❌ Error closing database pool:", error);
   }
 };
 

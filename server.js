@@ -1,3 +1,4 @@
+import dns from "dns";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -8,6 +9,9 @@ import fileUpload from "express-fileupload";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+
+// Force IPv4 connections to avoid IPv6 issues on Render
+dns.setDefaultResultOrder('ipv4first');
 
 // Import configurations and services
 import { testConnection, closePool } from "./config/database.js";
