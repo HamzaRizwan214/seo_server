@@ -5,25 +5,20 @@ dotenv.config();
 
 const { Pool } = pg;
 
-// Database configuration
-const dbConfig = process.env.DATABASE_URL ? {
-  // Use connection string if available (Supabase)
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-} : {
-  // Use individual parameters for local development
+// Database configuration - Use individual parameters for better Render compatibility
+const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'seo_amanda',
-  user: process.env.DB_USER,
+  port: parseInt(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME || 'postgres',
+  user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
-  ssl: false,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
+  // Additional options for better connectivity
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 };
 
 // Create connection pool
