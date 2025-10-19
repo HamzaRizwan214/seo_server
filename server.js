@@ -11,7 +11,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // Force IPv4 connections to avoid IPv6 issues on Render
-dns.setDefaultResultOrder('ipv4first');
+// dns.setDefaultResultOrder('ipv4first');
 
 // Import configurations and services
 import { testConnection, closePool } from "./config/database.js";
@@ -19,13 +19,14 @@ import { emailService } from "./services/email.js";
 import { paypalService } from "./services/paypal.js";
 import { stripeService } from "./services/stripe.js";
 import { sanitizeInput } from "./middleware/validation.js";
-import { 
-  securityHeaders, 
-  sanitizeInput as enhancedSanitize, 
+import {
+  securityHeaders,
+  sanitizeInput as enhancedSanitize,
   securityLogger,
-  secureFileUpload 
+  secureFileUpload,
 } from "./middleware/security.js";
 import { authenticateAdmin } from "./middleware/auth.js";
+import { tempFileManager } from "./utils/tempFileManager.js";
 
 // Import routes
 import orderRoutes from "./routes/orders.js";
@@ -33,7 +34,6 @@ import adminRoutes from "./routes/admin.js";
 
 // Load environment variables
 dotenv.config();
-
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -51,26 +51,34 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        scriptSrc: ["'self'", "https://js.stripe.com", "https://www.paypal.com"],
+        scriptSrc: [
+          "'self'",
+          "https://js.stripe.com",
+          "https://www.paypal.com",
+        ],
         imgSrc: ["'self'", "data:", "https:", "https://cdn.sanity.io"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        connectSrc: ["'self'", "https://api.stripe.com", "https://api.paypal.com"],
+        connectSrc: [
+          "'self'",
+          "https://api.stripe.com",
+          "https://api.paypal.com",
+        ],
         frameSrc: ["https://js.stripe.com", "https://www.paypal.com"],
       },
     },
     hsts: {
       maxAge: 31536000,
       includeSubDomains: true,
-      preload: true
+      preload: true,
     },
     noSniff: true,
     xssFilter: true,
-    referrerPolicy: { policy: "strict-origin-when-cross-origin" }
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   })
 );
 
 // Hide server information
-app.disable('x-powered-by');
+app.disable("x-powered-by");
 
 // CORS configuration
 const corsOptions = {
@@ -82,6 +90,7 @@ const corsOptions = {
     "http://localhost:5174",
     "http://localhost:5173",
   ],
+  // origin: ["https://admin.seobyamanda.com", "https://seobyamanda.com/"],
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -149,26 +158,28 @@ app.use(
 app.use(compression());
 
 // Enhanced logging for production
-const morganFormat = process.env.NODE_ENV === 'production' 
-  ? 'combined' 
-  : 'dev';
+const morganFormat = process.env.NODE_ENV === "production" ? "combined" : "dev";
 app.use(morgan(morganFormat));
 
 // Body parsing with security limits
-app.use(express.json({ 
-  limit: "1mb", // Reduced from 10mb for security
-  verify: (req, res, buf) => {
-    // Store raw body for webhook verification
-    if (req.originalUrl.includes('/webhook/')) {
-      req.rawBody = buf;
-    }
-  }
-}));
-app.use(express.urlencoded({ 
-  extended: true, 
-  limit: "1mb",
-  parameterLimit: 100 // Limit number of parameters
-}));
+app.use(
+  express.json({
+    limit: "1mb", // Reduced from 10mb for security
+    verify: (req, res, buf) => {
+      // Store raw body for webhook verification
+      if (req.originalUrl.includes("/webhook/")) {
+        req.rawBody = buf;
+      }
+    },
+  })
+);
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "1mb",
+    parameterLimit: 100, // Limit number of parameters
+  })
+);
 
 // File upload middleware
 app.use(
@@ -190,11 +201,22 @@ app.use(securityLogger);
 app.use(enhancedSanitize);
 app.use(sanitizeInput);
 
-// Create uploads directory if it doesn't exist
+// Handle uploads directory for different environments
 import fs from "fs";
-const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || "uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+
+const uploadsDir =
+  process.env.NODE_ENV === "production"
+    ? "/tmp/uploads" // Use /tmp on Vercel (writable but temporary)
+    : path.join(__dirname, process.env.UPLOAD_DIR || "uploads");
+
+// Create uploads directory if it doesn't exist
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (error) {
+  console.warn("⚠️  Could not create uploads directory:", error.message);
+  console.warn("   File uploads may not work properly");
 }
 
 // Serve static files (uploads)
@@ -238,138 +260,160 @@ app.get("/health", async (req, res) => {
 app.use("/api/orders", orderRoutes);
 app.use("/api/admin", adminRoutes);
 
-// File upload endpoint for deliverables (secured)
-app.post("/api/admin/orders/:orderId/deliverables", 
-  authenticateAdmin, 
-  secureFileUpload, 
-  async (req, res) => {
+// Temp file management endpoint (admin only)
+app.post("/api/admin/cleanup-temp", authenticateAdmin, async (req, res) => {
   try {
-    if (!req.files || Object.keys(req.files).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No files were uploaded",
-      });
-    }
-
-    const { orderId } = req.params;
-    const file = req.files.file;
-
-    // Generate unique filename
-    const timestamp = Date.now();
-    const fileName = `${timestamp}-${file.name}`;
-    const filePath = path.join(uploadsDir, fileName);
-
-    // Move file to uploads directory
-    await file.mv(filePath);
-
-    // Save file info to database
-    const { query } = await import("./config/database.js");
-    await query(
-      "INSERT INTO deliverables (order_id, file_name, file_path, file_type, file_size, uploaded_by) VALUES ($1, $2, $3, $4, $5, $6)",
-      [orderId, file.name, fileName, file.mimetype, file.size, req.admin?.id]
-    );
-
+    const cleanedCount = await tempFileManager.cleanupAll();
     res.json({
       success: true,
-      message: "File uploaded successfully",
-      data: {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.mimetype,
-      },
+      message: `Cleaned up ${cleanedCount} temp files`,
+      data: { cleanedCount }
     });
   } catch (error) {
-    console.error("File upload error:", error);
+    console.error("Manual cleanup error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to upload file",
+      message: "Failed to cleanup temp files"
     });
   }
 });
 
-// Send deliverables via email (secured)
-app.post("/api/admin/orders/:orderId/send-deliverables", 
-  authenticateAdmin, 
+// File upload endpoint for deliverables (secured)
+app.post(
+  "/api/admin/orders/:orderId/deliverables",
+  authenticateAdmin,
+  secureFileUpload,
   async (req, res) => {
-  try {
-    const { orderId } = req.params;
+    try {
+      if (!req.files || Object.keys(req.files).length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No files were uploaded",
+        });
+      }
 
-    const { query } = await import("./config/database.js");
+      const { orderId } = req.params;
+      const file = req.files.file;
 
-    // Get order and customer details
-    const orderResult = await query(
-      `
+      // Generate unique filename
+      const timestamp = Date.now();
+      const fileName = `${timestamp}-${file.name}`;
+      const filePath = path.join(uploadsDir, fileName);
+
+      // Move file to uploads directory
+      await file.mv(filePath);
+
+      // Save file info to database
+      const { query } = await import("./config/database.js");
+      await query(
+        "INSERT INTO deliverables (order_id, file_name, file_path, file_type, file_size, uploaded_by) VALUES ($1, $2, $3, $4, $5, $6)",
+        [orderId, file.name, fileName, file.mimetype, file.size, req.admin?.id]
+      );
+
+      res.json({
+        success: true,
+        message: "File uploaded successfully",
+        data: {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.mimetype,
+        },
+      });
+    } catch (error) {
+      console.error("File upload error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to upload file",
+      });
+    }
+  }
+);
+
+// Send deliverables via email (secured)
+app.post(
+  "/api/admin/orders/:orderId/send-deliverables",
+  authenticateAdmin,
+  async (req, res) => {
+    try {
+      const { orderId } = req.params;
+
+      const { query } = await import("./config/database.js");
+
+      // Get order and customer details
+      const orderResult = await query(
+        `
       SELECT o.*, c.name as customer_name, c.email as customer_email
       FROM orders o
       JOIN customers c ON o.customer_id = c.id
       WHERE o.id = $1
     `,
-      [orderId]
-    );
+        [orderId]
+      );
 
-    if (orderResult.rows.length === 0) {
-      return res.status(404).json({
+      if (orderResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found",
+        });
+      }
+
+      const order = orderResult.rows[0];
+
+      // Get deliverables
+      const deliverablesResult = await query(
+        "SELECT * FROM deliverables WHERE order_id = $1",
+        [orderId]
+      );
+
+      if (deliverablesResult.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No deliverables found for this order",
+        });
+      }
+
+      // Prepare attachments
+      const attachments = deliverablesResult.rows.map((deliverable) => ({
+        filename: deliverable.file_name,
+        path: path.join(uploadsDir, deliverable.file_path),
+      }));
+
+      // Send email with deliverables
+      await emailService.sendDeliverable(
+        order.customer_email,
+        {
+          trackingId: order.tracking_id,
+          customerName: order.customer_name,
+          serviceName: order.service_name,
+        },
+        attachments
+      );
+
+      // Update order status to completed
+      await query(
+        "UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+        ["completed", orderId]
+      );
+
+      // Add status history
+      await query(
+        "INSERT INTO order_status_history (order_id, status, notes, changed_by) VALUES ($1, $2, $3, $4)",
+        [orderId, "completed", "Deliverables sent to customer", req.admin?.id]
+      );
+
+      res.json({
+        success: true,
+        message: "Deliverables sent successfully",
+      });
+    } catch (error) {
+      console.error("Send deliverables error:", error);
+      res.status(500).json({
         success: false,
-        message: "Order not found",
+        message: "Failed to send deliverables",
       });
     }
-
-    const order = orderResult.rows[0];
-
-    // Get deliverables
-    const deliverablesResult = await query(
-      "SELECT * FROM deliverables WHERE order_id = $1",
-      [orderId]
-    );
-
-    if (deliverablesResult.rows.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No deliverables found for this order",
-      });
-    }
-
-    // Prepare attachments
-    const attachments = deliverablesResult.rows.map((deliverable) => ({
-      filename: deliverable.file_name,
-      path: path.join(uploadsDir, deliverable.file_path),
-    }));
-
-    // Send email with deliverables
-    await emailService.sendDeliverable(
-      order.customer_email,
-      {
-        trackingId: order.tracking_id,
-        customerName: order.customer_name,
-        serviceName: order.service_name,
-      },
-      attachments
-    );
-
-    // Update order status to completed
-    await query(
-      "UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
-      ["completed", orderId]
-    );
-
-    // Add status history
-    await query(
-      "INSERT INTO order_status_history (order_id, status, notes, changed_by) VALUES ($1, $2, $3, $4)",
-      [orderId, "completed", "Deliverables sent to customer", req.admin?.id]
-    );
-
-    res.json({
-      success: true,
-      message: "Deliverables sent successfully",
-    });
-  } catch (error) {
-    console.error("Send deliverables error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to send deliverables",
-    });
   }
-});
+);
 
 // 404 handler
 app.use("*", (req, res) => {
@@ -478,6 +522,16 @@ const server = app.listen(PORT, async () => {
     }
   } catch (error) {
     console.warn("⚠️  Stripe service disabled for development");
+  }
+
+  // Clean up any existing temp files on startup
+  try {
+    const cleanedCount = await tempFileManager.cleanupAll();
+    if (cleanedCount > 0) {
+      console.log(`🧹 Cleaned up ${cleanedCount} temp files on startup`);
+    }
+  } catch (error) {
+    console.warn("⚠️  Temp file cleanup failed on startup:", error.message);
   }
 
   console.log(`\n✅ Server running on port ${PORT}`);

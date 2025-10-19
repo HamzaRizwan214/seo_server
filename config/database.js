@@ -1,9 +1,9 @@
 import pg from "pg";
 import dotenv from "dotenv";
-import dns from "dns";
+// import dns from "dns";
 
 // Force IPv4 connections to avoid IPv6 issues on Render
-dns.setDefaultResultOrder("ipv4first");
+// dns.setDefaultResultOrder("ipv4first");
 
 dotenv.config();
 

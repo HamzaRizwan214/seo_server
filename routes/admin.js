@@ -13,6 +13,7 @@ import {
 import { query, beginTransaction, commitTransaction, rollbackTransaction } from '../config/database.js';
 import { emailService } from '../services/email.js';
 import { paypalService } from '../services/paypal.js';
+import { tempFileManager } from '../utils/tempFileManager.js';
 
 const router = express.Router();
 
@@ -614,8 +615,10 @@ router.get('/analytics', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Deliver order with file attachment
+// Deliver order with file attachment (using temporary storage)
 router.post('/orders/:id/deliver', authenticateAdmin, async (req, res) => {
+  let tempFileInfo = null;
+  
   try {
     const { id } = req.params;
     const { message } = req.body;
@@ -639,17 +642,32 @@ router.post('/orders/:id/deliver', authenticateAdmin, async (req, res) => {
     // Validate file type
     const allowedTypes = [
       'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/pdf',
+      'application/zip',
+      'application/x-zip-compressed'
     ];
     
-    if (!allowedTypes.includes(deliveryFile.mimetype) && 
-        !deliveryFile.name.endsWith('.xlsx') && 
-        !deliveryFile.name.endsWith('.xls')) {
+    const allowedExtensions = ['.xlsx', '.xls', '.pdf', '.zip'];
+    const fileExtension = deliveryFile.name.toLowerCase().substring(deliveryFile.name.lastIndexOf('.'));
+    
+    if (!allowedTypes.includes(deliveryFile.mimetype) && !allowedExtensions.includes(fileExtension)) {
       return res.status(400).json({
         success: false,
-        message: 'Only Excel files (.xlsx, .xls) are allowed'
+        message: 'Only Excel (.xlsx, .xls), PDF, and ZIP files are allowed'
       });
     }
+
+    // Validate file size (10MB max)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (deliveryFile.size > maxSize) {
+      return res.status(400).json({
+        success: false,
+        message: 'File size must be less than 10MB'
+      });
+    }
+
+    console.log(`📤 Processing delivery for order ${id} with file: ${deliveryFile.name}`);
 
     // Get order and customer details
     const orderResult = await query(`
@@ -668,6 +686,10 @@ router.post('/orders/:id/deliver', authenticateAdmin, async (req, res) => {
 
     const order = orderResult.rows[0];
 
+    // Save file temporarily
+    tempFileInfo = await tempFileManager.saveTemp(deliveryFile.data, deliveryFile.name);
+    console.log(`💾 File temporarily saved: ${tempFileInfo.tempFileName}`);
+
     // Update order status to completed
     await query(
       'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
@@ -677,7 +699,7 @@ router.post('/orders/:id/deliver', authenticateAdmin, async (req, res) => {
     // Add status history
     await query(
       'INSERT INTO order_status_history (order_id, status, notes) VALUES ($1, $2, $3)',
-      [id, 'completed', 'Order delivered with file attachment']
+      [id, 'completed', `Order delivered with file attachment: ${deliveryFile.name}`]
     );
 
     // Send delivery email with attachment
@@ -692,26 +714,43 @@ router.post('/orders/:id/deliver', authenticateAdmin, async (req, res) => {
         },
         {
           filename: deliveryFile.name,
-          content: deliveryFile.data
+          path: tempFileInfo.tempPath
         }
       );
 
       console.log(`✅ Delivery email sent for order ${order.tracking_id}`);
     } catch (emailError) {
-      console.error('Email delivery failed:', emailError);
-      // Don't fail the request if email fails
+      console.error('❌ Email delivery failed:', emailError);
+      throw new Error('Failed to send delivery email: ' + emailError.message);
     }
+
+    // Clean up temp file immediately after email is sent
+    await tempFileManager.deleteTemp(tempFileInfo.tempPath);
+    console.log(`🗑️ Temp file cleaned up for order ${order.tracking_id}`);
 
     res.json({
       success: true,
-      message: 'Order delivered successfully'
+      message: 'Order delivered successfully',
+      data: {
+        orderId: id,
+        trackingId: order.tracking_id,
+        fileName: deliveryFile.name,
+        fileSize: deliveryFile.size
+      }
     });
 
   } catch (error) {
-    console.error('Order delivery error:', error);
+    console.error('❌ Order delivery error:', error);
+    
+    // Clean up temp file if it exists and there was an error
+    if (tempFileInfo) {
+      await tempFileManager.deleteTemp(tempFileInfo.tempPath);
+      console.log('🗑️ Temp file cleaned up after error');
+    }
+    
     res.status(500).json({
       success: false,
-      message: 'Failed to deliver order'
+      message: 'Failed to deliver order: ' + error.message
     });
   }
 });

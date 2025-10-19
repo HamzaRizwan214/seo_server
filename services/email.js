@@ -472,7 +472,8 @@ class EmailService {
     const attachments = [
       {
         filename: attachment.filename,
-        content: attachment.content,
+        // Support both content (Buffer) and path (file path)
+        ...(attachment.content ? { content: attachment.content } : { path: attachment.path }),
       },
     ];
 
