@@ -29,7 +29,7 @@ const { Pool } = pg;
 // };
 
 const dbConfig = {
-  connectionString: process.env.DATABASE_URL,
+  connectionString: "postgresql://postgres:CFSqsMSoshTJh7@db.chjixkifqfojpndkxwop.supabase.co:5432/postgres",
   ssl: {
     rejectUnauthorized: false  // Supabase has valid certs, but this is safer
   },
