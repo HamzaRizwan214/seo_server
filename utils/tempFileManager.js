@@ -8,8 +8,8 @@ const __dirname = path.dirname(__filename);
 class TempFileManager {
   constructor() {
     // Create temp directory in server root
-    this.tempDir = path.join(__dirname, '..', 'temp');
-    // this.tempDir = '/tmp';
+    //this.tempDir = path.join(__dirname, '..', 'temp');
+    this.tempDir = '/tmp';
     this.ensureTempDir();
   }
 
