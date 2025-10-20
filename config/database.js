@@ -10,33 +10,33 @@ dotenv.config();
 const { Pool } = pg;
 
 // Database configuration - Use individual parameters for better Render compatibility
-// const dbConfig = {
-//   host: process.env.DB_HOST || "localhost",
-//   port: parseInt(process.env.DB_PORT) || 5432,
-//   database: process.env.DB_NAME || "postgres",
-//   user: process.env.DB_USER || "postgres",
-//   password: process.env.DB_PASSWORD,
-//   ssl:
-//     process.env.NODE_ENV === "production"
-//       ? { rejectUnauthorized: false }
-//       : false,
-//   max: 20,
-//   idleTimeoutMillis: 30000,
-//   connectionTimeoutMillis: 10000,
-//   // Additional options for better connectivity
-//   keepAlive: true,
-//   keepAliveInitialDelayMillis: 10000,
-// };
-
 const dbConfig = {
-  connectionString: "postgresql://postgres:CFSqsMSoshTJh7@db.chjixkifqfojpndkxwop.supabase.co:5432/postgres",
-  ssl: {
-    rejectUnauthorized: false  // Supabase has valid certs, but this is safer
-  },
+  host: "db.chjixkifqfojpndkxwop.supabase.co" || "localhost",
+  port: parseInt(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME || "postgres",
+  user: process.env.DB_USER || "postgres",
+  password: process.env.DB_PASSWORD,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000
+  connectionTimeoutMillis: 10000,
+  // Additional options for better connectivity
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 };
+
+// const dbConfig = {
+//   connectionString: "postgresql://postgres:CFSqsMSoshTJh7@db.chjixkifqfojpndkxwop.supabase.co:5432/postgres",
+//   ssl: {
+//     rejectUnauthorized: false  // Supabase has valid certs, but this is safer
+//   },
+//   max: 20,
+//   idleTimeoutMillis: 30000,
+//   connectionTimeoutMillis: 10000
+// };
 
 
 // Create connection pool
