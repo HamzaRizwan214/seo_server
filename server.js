@@ -77,6 +77,8 @@ app.use(
   })
 );
 
+app.set('trust proxy', true);
+
 // Hide server information
 app.disable("x-powered-by");
 
