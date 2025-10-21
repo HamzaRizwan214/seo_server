@@ -21,8 +21,8 @@ const dbConfig = {
       ? { require: true, rejectUnauthorized: false }
       : false,
   max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 300000,
+  connectionTimeoutMillis: 100000,
   // Additional options for better connectivity
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000,
