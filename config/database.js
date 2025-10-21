@@ -9,7 +9,7 @@ dotenv.config();
 
 const { Pool } = pg;
 
-Database configuration - Use individual parameters for better Render compatibility
+// Database configuration - Use individual parameters for better Render compatibility
 const dbConfig = {
   host: process.env.DB_HOST || "localhost",
   port: parseInt(process.env.DB_PORT) || 5432,
