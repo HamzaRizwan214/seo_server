@@ -9,34 +9,34 @@ dotenv.config();
 
 const { Pool } = pg;
 
-// Database configuration - Use individual parameters for better Render compatibility
-// const dbConfig = {
-//   host: process.env.DB_HOST || "localhost",
-//   port: parseInt(process.env.DB_PORT) || 5432,
-//   database: process.env.DB_NAME || "postgres",
-//   user: process.env.DB_USER || "postgres",
-//   password: process.env.DB_PASSWORD,
-//   ssl:
-//     process.env.NODE_ENV === "production"
-//       ? { require: true, rejectUnauthorized: false }
-//       : false,
-//   max: 20,
-//   idleTimeoutMillis: 300000,
-//   connectionTimeoutMillis: 100000,
-//   // Additional options for better connectivity
-//   keepAlive: true,
-//   keepAliveInitialDelayMillis: 10000,
-// };
-
+Database configuration - Use individual parameters for better Render compatibility
 const dbConfig = {
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    require: true, rejectUnauthorized: false  
-  },
+  host: process.env.DB_HOST || "localhost",
+  port: parseInt(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME || "postgres",
+  user: process.env.DB_USER || "postgres",
+  password: process.env.DB_PASSWORD,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { require: true, rejectUnauthorized: false }
+      : false,
   max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000
+  idleTimeoutMillis: 300000,
+  connectionTimeoutMillis: 100000,
+  // Additional options for better connectivity
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 };
+
+// const dbConfig = {
+//   connectionString: process.env.DATABASE_URL,
+//   ssl: {
+//     require: true, rejectUnauthorized: false  
+//   },
+//   max: 20,
+//   idleTimeoutMillis: 30000,
+//   connectionTimeoutMillis: 10000
+// };
 
 
 // Create connection pool
