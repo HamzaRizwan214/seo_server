@@ -11,7 +11,7 @@ const { Pool } = pg;
 
 // Database configuration - Use individual parameters for better Render compatibility
 const dbConfig = {
-  host: "db.chjixkifqfojpndkxwop.supabase.co" || "localhost",
+  host: process.env.DB_HOST || "localhost",
   port: parseInt(process.env.DB_PORT) || 5432,
   database: process.env.DB_NAME || "postgres",
   user: process.env.DB_USER || "postgres",
@@ -29,7 +29,7 @@ const dbConfig = {
 };
 
 // const dbConfig = {
-//   connectionString: "postgresql://postgres:CFSqsMSoshTJh7@db.chjixkifqfojpndkxwop.supabase.co:5432/postgres",
+//   connectionString: process.env.DATABASE_URL,
 //   ssl: {
 //     rejectUnauthorized: false  // Supabase has valid certs, but this is safer
 //   },
