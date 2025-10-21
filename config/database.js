@@ -18,7 +18,7 @@ const dbConfig = {
   password: process.env.DB_PASSWORD,
   ssl:
     process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
+      ? { require: true, rejectUnauthorized: false }
       : false,
   max: 20,
   idleTimeoutMillis: 30000,
